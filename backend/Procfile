@@ -1,0 +1,1 @@
+web: java -XX:MaxRAMPercentage=65.0 -jar target/codearena-0.1.0.jar

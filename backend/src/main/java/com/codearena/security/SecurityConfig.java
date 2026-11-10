@@ -14,6 +14,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -30,6 +32,7 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 @Configuration
 public class SecurityConfig {
@@ -68,8 +71,9 @@ public class SecurityConfig {
 
     @Bean
     SecurityFilterChain apiSecurity(HttpSecurity http, AccountRepository accounts,
-                                    @Qualifier("corsConfiguration") CorsConfigurationSource cors)
+                                    @Qualifier("corsConfiguration") CorsConfigurationSource cors, Environment env)
         throws Exception {
+        if (env.acceptsProfiles(Profiles.of("prod"))) http.addFilterAfter(new AuthThrottle(), CorsFilter.class);
         http.csrf(AbstractHttpConfigurer::disable)
             .cors(config -> config.configurationSource(cors))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -78,7 +82,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/users/me", "/api/users/me/**", "/api/auth/me", "/api/auth/logout").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/stats/public", "/api/problems", "/api/problems/*",
+                .requestMatchers(HttpMethod.GET, "/api/health", "/api/stats/public", "/api/problems", "/api/problems/*",
                     "/api/problems/slug/*", "/api/contests", "/api/contests/*", "/api/contests/*/leaderboard",
                     "/api/leaderboard/*", "/api/users/*", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .anyRequest().authenticated())

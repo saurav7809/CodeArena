@@ -20,3 +20,5 @@ Sample runs and custom runs use the same queue but are excluded from scoring and
 On Windows the judge attaches a gated subprocess to a Job Object before releasing the compiler or program. The Job Object caps committed memory and process count and supports terminating the whole tree. This is a trusted local runner with the operating system account’s privileges. The gateway can be replaced with a hardened runner for public use.
 
 Pending work survives API restarts. Running jobs that stop reporting become internal errors after three minutes. The first version uses one execution slot to fit a small development machine. The database queue and replaceable gateway allow a separate worker deployment later.
+
+With the `prod` profile, the API calls an authenticated hosted judge over HTTPS. It submits resource limits and disables sandbox networking in each job request. It compares outputs itself, filters results to visible tests, and enforces admission budgets in PostgreSQL. Cloud Run allocates CPU to the worker between HTTP requests. See the [deployment guide](deployment.md).

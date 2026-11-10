@@ -41,8 +41,8 @@ class SubmissionWorker {
             var job = new JudgeGateway.Job(pending.language(), pending.code(), spec.timeLimitMs(), spec.memoryLimitMb(), spec.cases());
             submissions.finish(pending, judge.execute(job));
         } catch (RuntimeException error) {
-            log.warn("Local judge job {} failed with {}", pending.id(), error.getClass().getSimpleName());
-            submissions.fail(pending.id(), "The local judge is unavailable. Check the judge terminal and retry.");
+            log.warn("Judge job {} failed with {}", pending.id(), error.getClass().getSimpleName());
+            submissions.fail(pending.id(), "Code execution is temporarily unavailable. Try again.");
         } finally {
             busy.set(false);
         }

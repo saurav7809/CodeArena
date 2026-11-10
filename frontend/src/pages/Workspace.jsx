@@ -1,7 +1,7 @@
 import { Braces, Check, Clipboard, Code2, FileText, FlaskConical, Play, RotateCcw, Send, Terminal } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
-import { api, message } from '../api';
+import { api, apiOrigin, message } from '../api';
 import SubmissionResults, { isPending } from '../components/SubmissionResults';
 import { BackLink, Badge, Empty, ErrorNotice, LANGUAGE_NAMES, Loading, Resource } from '../components/ui';
 import { useApp, useAuth } from '../context';
@@ -152,6 +152,7 @@ function Practice({ detail, contest }) {
               <button type="button" className="btn primary small" disabled={busy || !code.trim()} onClick={() => queue('submit')}><Send size={15} />Submit</button>
             </div> : <Link className="btn primary small" to="/login" state={{ from: location.pathname }}>Log in to run and submit</Link>}
           </div>
+          {apiOrigin && <p className="small-text judge-notice">Running or submitting sends your code and test inputs to the hosted judge.</p>}
         </div>
         <div className="panel test-panel">
           <div className="panel-bar tabs test-tabs" aria-label="Editor results panel">

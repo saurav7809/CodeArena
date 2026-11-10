@@ -12,3 +12,11 @@
 - [x] Documented Windows startup, database configuration, API usage, and the local judge’s execution boundary.
 
 The local judge requires trusted inputs. A public deployment needs a separate, hardened execution service. Account verification uses field validation and uniqueness checks. An email delivery and verification flow is outside this build.
+
+## Deployment preparation
+
+- [x] Added the Vercel SPA configuration and a deployment build that requires the API’s HTTPS origin.
+- [x] Added the Cloud Run source entrypoint and production profile with verified database TLS, exact-origin CORS, and health checks.
+- [x] Added a hosted Judge0 adapter, bounded execution admission, and authentication throttling.
+- [x] Verified both frontend builds and passed 24 Java tests, including real local PostgreSQL and judge integration. The packaged production profile rejected invalid settings at startup.
+- [ ] Configure the production database, hosted judge, and secrets. Follow the [deployment guide](docs/deployment.md) to verify the deployed services.

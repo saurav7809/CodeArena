@@ -1,0 +1,6 @@
+.gcloudignore
+.git
+target/
+.env
+.env.*
+*.log

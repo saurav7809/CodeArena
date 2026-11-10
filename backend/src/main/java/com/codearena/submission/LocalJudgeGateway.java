@@ -5,22 +5,26 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 @Component
+@Profile("!prod")
 class LocalJudgeGateway implements JudgeGateway {
+    private static final List<String> LOOPBACK = List.of("127.0.0.1", "localhost", "::1", "[::1]");
     private final RestClient client;
     private final String token;
 
     LocalJudgeGateway(RestClient.Builder builder, @Value("${arena.judge-url}") String judgeUrl,
-                      @Value("${arena.judge-token}") String token) {
+                      @Value("${arena.judge-token}") String token,
+                      @Value("${server.address}") String serverAddress) {
         URI uri = URI.create(judgeUrl);
         if (!"http".equals(uri.getScheme()) || uri.getHost() == null
-            || !List.of("127.0.0.1", "localhost", "[::1]").contains(uri.getHost())
+            || !LOOPBACK.contains(uri.getHost()) || !LOOPBACK.contains(serverAddress)
             || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null) {
-            throw new IllegalArgumentException("The trusted development judge must use a loopback HTTP URL.");
+            throw new IllegalArgumentException("The trusted development judge requires a loopback API bind and judge URL.");
         }
         var transport = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3)).build());

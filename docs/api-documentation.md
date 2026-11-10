@@ -15,3 +15,5 @@ Springdoc serves the [OpenAPI JSON](http://127.0.0.1:8080/v3/api-docs) and [Swag
 Run and Submit return HTTP 202 with a submission ID. Poll `GET /submissions/{id}` until the verdict leaves `PENDING` and `RUNNING`. Use `customInput` only for Run. Set `contestId` when working inside an eligible contest. Accepted Run jobs do not count toward solved problems.
 
 List responses return `items`, `page`, `size`, and `total`. Pages are zero-based and page size is capped at 50. Problem filters include `search`, `category`, `difficulty`, `solved`, and `sort`. Submission filters include `problemId`, `language`, and `verdict`. Validation errors return a human-readable `message` field.
+
+`GET /api/health` reports database connectivity and whether an execution adapter is configured. It returns HTTP 503 when the database is unavailable. A configured judge is verified separately by submitting a test solution.

@@ -1,0 +1,37 @@
+server:
+  address: 0.0.0.0
+  port: ${PORT:8080}
+  shutdown: graceful
+  tomcat:
+    connection-timeout: 5s
+    threads:
+      max: 48
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 8s
+  datasource:
+    url: ${CODEARENA_DB_URL}
+    username: ${CODEARENA_DB_USER}
+    password: ${CODEARENA_DB_PASSWORD}
+    hikari:
+      minimum-idle: 1
+      connection-timeout: 3000
+      validation-timeout: 1500
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+arena:
+  frontend-origin: ${CODEARENA_FRONTEND_ORIGIN}
+  hosted-judge:
+    url: ${CODEARENA_JUDGE0_URL}
+    token: ${CODEARENA_JUDGE0_TOKEN}
+    auth: ${CODEARENA_JUDGE0_AUTH:token}
+    python-id: ${CODEARENA_JUDGE0_PYTHON_ID}
+    java-id: ${CODEARENA_JUDGE0_JAVA_ID}
+    cpp-id: ${CODEARENA_JUDGE0_CPP_ID}
+  execution:
+    max-active: ${CODEARENA_MAX_ACTIVE_JOBS:16}
+    per-user-per-minute: ${CODEARENA_JOBS_PER_USER_PER_MINUTE:6}
+    daily-cases: ${CODEARENA_DAILY_CASE_LIMIT:400}

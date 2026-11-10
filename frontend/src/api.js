@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-export const api = axios.create({ baseURL: '/api', timeout: 12000 });
+export const apiOrigin = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
+export const api = axios.create({ baseURL: apiOrigin + '/api', timeout: 12000 });
 let token = sessionStorage.getItem('arena-token');
 
 export function setToken(value) {

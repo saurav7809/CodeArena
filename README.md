@@ -4,6 +4,8 @@ CodeArena is a local competitive programming platform. Browse 20 seeded problems
 
 The app uses React, Vite, Tailwind CSS, and Recharts for the frontend. The Java 17 and Spring Boot 3.5 API uses PostgreSQL, Flyway, BCrypt, and signed JWTs. A separate Python service compiles and executes Python 3, Java 17, and C++17 submissions. See [architecture](docs/architecture.md), [schema](docs/database-schema.md), [API reference](docs/api-documentation.md), and [development progress](DEVELOPMENT_PROGRESS.md).
 
+For a hosted demo, follow the [Vercel and Cloud Run deployment guide](docs/deployment.md). The production profile uses a private hosted sandbox.
+
 ## Prerequisites
 
 - Windows PowerShell or PowerShell 7

@@ -18,3 +18,5 @@ Flyway creates the schema in [V1](../backend/src/main/resources/db/migration/V1_
 | `user_activity` | View of actual submissions for dashboard and analytics queries |
 
 Foreign keys preserve relationships. Problems are archived so previous submissions remain readable. Leaderboards are calculated from judged submissions rather than stored counters. User history, problem submissions, contests, and queue lookups have dedicated indexes.
+
+[V3](../backend/src/main/resources/db/migration/V3__execution_budget_index.sql) indexes submission timestamps for the production execution budget, which includes both Run and Submit jobs.

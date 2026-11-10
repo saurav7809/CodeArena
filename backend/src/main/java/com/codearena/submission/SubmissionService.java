@@ -37,14 +37,16 @@ public class SubmissionService {
     private final ProblemService problems;
     private final ContestService contests;
     private final JudgeGateway judge;
+    private final SubmissionAdmission admission;
 
     public SubmissionService(JdbcClient jdbc, ObjectMapper json, ProblemService problems, ContestService contests,
-                             JudgeGateway judge) {
+                             JudgeGateway judge, SubmissionAdmission admission) {
         this.jdbc = jdbc;
         this.json = json;
         this.problems = problems;
         this.contests = contests;
         this.judge = judge;
+        this.admission = admission;
     }
 
     public record Request(@NotNull @Positive Long problemId, @NotBlank @Pattern(regexp = "JAVA|PYTHON|CPP") String language,
@@ -59,7 +61,7 @@ public class SubmissionService {
     @Transactional
     public Card queue(long userId, Request request, boolean submit) {
         if (!judge.configured()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Configure the local judge before running code.");
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Code execution is unavailable.");
         }
         if (submit && request.customInput() != null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Use Run for custom input.");
@@ -82,6 +84,7 @@ public class SubmissionService {
                 test.position(), test.input(), test.expectedOutput(), test.visible())).toList();
         }
         if (tests.isEmpty()) throw new ResponseStatusException(HttpStatus.CONFLICT, "This problem has no runnable tests.");
+        admission.check(userId, tests.size());
         String payload = encode(new JudgeGateway.Spec(problem.timeLimitMs(), problem.memoryLimitMb(), tests));
         long id = jdbc.sql("""
             INSERT INTO submissions (user_id, problem_id, language, mode, code, total_cases, job_payload)
@@ -142,9 +145,12 @@ public class SubmissionService {
         Set<Integer> visible = pending.spec().cases().stream().filter(JudgeGateway.Test::visible)
             .map(JudgeGateway.Test::position).collect(Collectors.toSet());
         var cases = result.cases() == null ? List.of() : result.cases().stream()
-            .filter(test -> visible.contains(test.position())).toList();
+            .filter(test -> visible.contains(test.position()))
+            .map(test -> new JudgeGateway.CaseResult(test.position(), test.verdict(),
+                storedText(test.stdout(), 8192), storedText(test.stderr(), 4096), test.elapsedMs(), test.memoryKb()))
+            .toList();
         String diagnostic = switch (result.verdict()) {
-            case "COMPILATION_ERROR", "INTERNAL_ERROR" -> result.diagnostic();
+            case "COMPILATION_ERROR", "INTERNAL_ERROR" -> storedText(result.diagnostic(), 4096);
             default -> null;
         };
         jdbc.sql("""
@@ -155,6 +161,13 @@ public class SubmissionService {
             """).param("id", pending.id()).param("verdict", result.verdict()).param("elapsed", result.elapsedMs())
             .param("memory", result.memoryKb()).param("passed", result.passedCases()).param("total", result.totalCases())
             .param("details", encode(cases)).param("diagnostic", diagnostic).update();
+    }
+
+    private static String storedText(String value, int limit) {
+        if (value == null) return "";
+        int end = Math.min(value.length(), limit);
+        if (end > 0 && Character.isHighSurrogate(value.charAt(end - 1))) end--;
+        return value.substring(0, end).replace('\0', '\uFFFD');
     }
 
     void fail(long id, String diagnostic) {

@@ -10,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -22,20 +24,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@SpringBootTest
-@AutoConfigureMockMvc
+@SpringBootTest(properties = {"arena.execution.max-active=50", "arena.execution.per-user-per-minute=3",
+    "arena.execution.daily-cases=10000"})
+@AutoConfigureMockMvc(print = MockMvcPrint.NONE)
 @EnabledIfEnvironmentVariable(named = "CODEARENA_TEST_DB_URL", matches = ".+/codearena_test(?:\\?.*)?")
 class ArenaIntegrationTest {
+    private static final String TEST_SIGNING_KEY = UUID.randomUUID().toString();
+
     @DynamicPropertySource
     static void testDatabase(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", () -> System.getenv("CODEARENA_TEST_DB_URL"));
+        registry.add("arena.jwt-secret", () -> TEST_SIGNING_KEY);
+        registry.add("arena.admin-password", () -> "");
     }
 
     @Autowired MockMvc http;
     @Autowired ObjectMapper json;
+    @Autowired JdbcClient jdbc;
 
     @Test
     void catalogUsesMigrationsAndKeepsHiddenTestsPrivate() throws Exception {
+        http.perform(get("/api/health")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("UP"))
+            .andExpect(header().string("Cache-Control", "no-store"));
         http.perform(get("/api/problems").param("difficulty", "EASY").param("category", "Arrays"))
             .andExpect(status().isOk()).andExpect(jsonPath("$.total").isNumber())
             .andExpect(jsonPath("$.items[0].category").value("Arrays"));
@@ -143,6 +154,7 @@ class ArenaIntegrationTest {
         assertThat(rank.path("username").asText()).isEqualTo(username);
         assertThat(rank.path("points").asInt()).isEqualTo(120);
         assertThat(rank.path("penalty").asInt()).isGreaterThanOrEqualTo(7);
+        body(post("/api/submissions/run"), token, good).andExpect(status().isTooManyRequests());
         http.perform(get("/api/submissions/" + accepted).header("Authorization", bearer(register(unique("observer")).path("token").asText())))
             .andExpect(status().isNotFound());
     }
@@ -168,8 +180,11 @@ class ArenaIntegrationTest {
     }
 
     private String admin() throws Exception {
-        return read(body(post("/api/auth/login"), null, Map.of("identifier", "arena_admin",
-            "password", System.getenv("CODEARENA_ADMIN_PASSWORD"))).andExpect(status().isOk())).path("token").asText();
+        String username = unique("testadmin");
+        long id = register(username).path("user").path("id").asLong();
+        jdbc.sql("UPDATE users SET role = 'ADMIN' WHERE id = :id").param("id", id).update();
+        return read(body(post("/api/auth/login"), null, Map.of("identifier", username, "password", "Practice!123"))
+            .andExpect(status().isOk())).path("token").asText();
     }
 
     private ResultActions body(MockHttpServletRequestBuilder request, String token, Map<String, ?> data) throws Exception {

@@ -9,6 +9,7 @@ import jakarta.validation.constraints.Size;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Locale;
+import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -26,6 +27,7 @@ public class AccountService implements ApplicationRunner {
     private final PasswordEncoder passwords;
     private final Tokens tokens;
     private final String adminPassword;
+    private final String dummyPasswordHash;
 
     public AccountService(AccountRepository accounts, JdbcClient jdbc, PasswordEncoder passwords, Tokens tokens,
                           @Value("${arena.admin-password}") String adminPassword) {
@@ -34,6 +36,7 @@ public class AccountService implements ApplicationRunner {
         this.passwords = passwords;
         this.tokens = tokens;
         this.adminPassword = adminPassword;
+        this.dummyPasswordHash = passwords.encode(UUID.randomUUID().toString());
     }
 
     public record Registration(
@@ -71,8 +74,10 @@ public class AccountService implements ApplicationRunner {
     public AuthResult login(Login request) {
         String identifier = normalized(request.identifier());
         Account account = accounts.findByUsernameOrEmail(identifier, identifier).orElse(null);
-        if (account == null || !account.enabled || request.password().getBytes(StandardCharsets.UTF_8).length > 72
-            || !passwords.matches(request.password(), account.passwordHash)) {
+        String hash = account == null ? dummyPasswordHash : account.passwordHash;
+        boolean matches = request.password().getBytes(StandardCharsets.UTF_8).length <= 72
+            && passwords.matches(request.password(), hash);
+        if (account == null || !account.enabled || !matches) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Check your username or email and password.");
         }
         return authenticated(account);
