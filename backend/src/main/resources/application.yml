@@ -1,0 +1,24 @@
+server:
+  address: 127.0.0.1
+  port: ${CODEARENA_API_PORT:8080}
+  error:
+    include-message: never
+spring:
+  datasource:
+    url: ${CODEARENA_DB_URL:jdbc:postgresql://127.0.0.1:55432/codearena}
+    username: ${CODEARENA_DB_USER:codearena}
+    password: ${CODEARENA_DB_PASSWORD:}
+    hikari:
+      maximum-pool-size: 6
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+arena:
+  jwt-secret: ${CODEARENA_JWT_SECRET:}
+  frontend-origin: ${CODEARENA_FRONTEND_ORIGIN:http://127.0.0.1:5173}
+  judge-url: ${CODEARENA_JUDGE_URL:http://127.0.0.1:8091}
+  judge-token: ${CODEARENA_JUDGE_TOKEN:}
+  admin-password: ${CODEARENA_ADMIN_PASSWORD:}
