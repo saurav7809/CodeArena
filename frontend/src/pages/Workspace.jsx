@@ -1,4 +1,4 @@
-import { Braces, Check, Clipboard, Code2, FileText, FlaskConical, Play, RotateCcw, Send, Sparkles, Terminal } from 'lucide-react';
+import { Check, Clipboard, Code2, Cpu, FileCode2, FileText, FlaskConical, Play, RotateCcw, Send, Sparkles, Terminal, Timer } from 'lucide-react';
 import { lazy, Suspense, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { apiOrigin } from '../api';
@@ -16,8 +16,10 @@ const FILENAMES = { PYTHON: 'main.py', JAVA: 'Main.java', CPP: 'main.cpp' };
 function Example({ test, index }) {
   return <div className="example">
     <h3>Example {index + 1}</h3>
-    <div className="example-block"><span>Input</span><pre>{test.input || '(empty)'}</pre></div>
-    <div className="example-block"><span>Expected output</span><pre>{test.expectedOutput || '(empty)'}</pre></div>
+    <div className="example-values">
+      <div className="example-block"><span>Input</span><pre>{test.input || '(empty)'}</pre></div>
+      <div className="example-block"><span>Expected output</span><pre>{test.expectedOutput || '(empty)'}</pre></div>
+    </div>
   </div>;
 }
 
@@ -80,7 +82,7 @@ function Practice({ detail, contest }) {
   }
 
   return <>
-    <div className="workspace-title"><div><p className="eyebrow">{contest?.name || 'PRACTICE ARENA'}</p>
+    <div className="workspace-title"><div>{contest && <p className="eyebrow">{contest.name}</p>}
       <h1>{problem.title}</h1>
       <div className="button-row"><Badge value={problem.difficulty} /><span className="topic-chip">{problem.category}</span>
         {solved && <span className="badge green"><Check size={13} />Solved</span>}</div>
@@ -95,15 +97,15 @@ function Practice({ detail, contest }) {
           <h3>Constraints</h3><p>{detail.constraints}</p>
           {detail.examples.map((test, index) => <Example key={test.position} test={test} index={index} />)}
           {detail.explanation && <><h3>Explanation</h3><p>{detail.explanation}</p></>}
-          <div className="statement-meta"><span>{detail.timeLimitMs} ms per case</span><span>{detail.memoryLimitMb} MB memory</span>
+          <div className="statement-meta"><span><Timer size={14} />{detail.timeLimitMs} ms per case</span><span><Cpu size={14} />{detail.memoryLimitMb} MB memory</span>
             <span>{problem.accepted} accepted / {problem.submissions} submissions</span></div>
         </div>
       </article>
-      <section className="workspace-tools">
+      <section className="workspace-tools" aria-label="Solution editor and tests">
         <div className="panel code-panel">
           <div className="panel-bar code-toolbar">
-            <div className="button-row"><Braces size={17} /><strong>{FILENAMES[language]}</strong></div>
-            <div className="button-row">
+            <div className="editor-file"><FileCode2 size={17} /><strong>{FILENAMES[language]}</strong></div>
+            <div className="button-row editor-controls">
               <select aria-label="Programming language" value={language} onChange={(event) => setLanguage(event.target.value)}>
                 {Object.entries(LANGUAGE_NAMES).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </select>

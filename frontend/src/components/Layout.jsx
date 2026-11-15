@@ -1,4 +1,4 @@
-import { Braces, CheckCircle2, CircleAlert, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
+import { Braces, CheckCircle2, CircleAlert, Github, LogOut, Menu, Moon, Sun, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useApp, useAuth } from '../context';
@@ -7,7 +7,7 @@ import { Avatar } from './ui';
 export function Brand() {
   return <Link to="/" className="brand" aria-label="CodeArena home">
     <span className="brand-mark"><Braces size={21} strokeWidth={2.4} /></span>
-    <span>Code<span className="brand-accent">Arena</span></span>
+    <span>CodeArena</span>
   </Link>;
 }
 
@@ -30,8 +30,8 @@ export default function Layout() {
     <header className="topbar"><div className="topbar-inner">
       <Brand />
       <button className="icon-button mobile-menu" type="button" onClick={() => setMenu(!menu)}
-        aria-label={menu ? 'Close navigation' : 'Open navigation'} aria-expanded={menu}>{menu ? <X size={20} /> : <Menu size={20} />}</button>
-      <nav className={'nav-links ' + (menu ? 'open' : '')} aria-label="Main navigation">
+        aria-label={menu ? 'Close navigation' : 'Open navigation'} aria-controls="main-navigation" aria-expanded={menu}>{menu ? <X size={20} /> : <Menu size={20} />}</button>
+      <nav id="main-navigation" className={'nav-links ' + (menu ? 'open' : '')} aria-label="Main navigation">
         <NavLink to="/" end>Home</NavLink><NavLink to="/problems">Problems</NavLink>
         <NavLink to="/career">Career</NavLink>
         <NavLink to="/contests">Contests</NavLink><NavLink to="/leaderboard">Leaderboard</NavLink>
@@ -54,9 +54,9 @@ export default function Layout() {
     </div></header>
     <main id="main-content"><Outlet /></main>
     <footer className="footer"><div className="footer-inner">
-      <div><Brand /><p>Practice with purpose. Compete with confidence.</p></div>
+      <Brand />
       <nav aria-label="Footer navigation"><Link to="/problems">Problems</Link><Link to="/career">Career</Link><Link to="/contests">Contests</Link>
-        <Link to="/leaderboard">Leaderboard</Link><a href="https://github.com/topics/competitive-programming" target="_blank" rel="noreferrer">GitHub community</a></nav>
+        <Link to="/leaderboard">Leaderboard</Link><a href="https://github.com/saurav7809/CodeArena" target="_blank" rel="noreferrer"><Github size={15} />GitHub</a></nav>
     </div></footer>
     {toast && <div className={'toast ' + toast.kind} role="status">
       {toast.kind === 'success' ? <CheckCircle2 size={19} /> : <CircleAlert size={19} />}

@@ -24,13 +24,13 @@ globalThis.MonacoEnvironment = { getWorker: () => new EditorWorker() };
 editor.defineTheme('arena-dark', {
   base: 'vs-dark', inherit: true, rules: [],
   colors: {
-    'editor.background': '#0e1220',
-    'editor.foreground': '#dfe5f7',
-    'editorLineNumber.foreground': '#68738d',
-    'editorLineNumber.activeForeground': '#aba8f7',
-    'editor.lineHighlightBackground': '#171c2f',
-    'editor.selectionBackground': '#35346a',
-    'editorCursor.foreground': '#a5a3ff',
+    'editor.background': '#0b1222',
+    'editor.foreground': '#e6ebfa',
+    'editorLineNumber.foreground': '#8392ae',
+    'editorLineNumber.activeForeground': '#b5c1ff',
+    'editor.lineHighlightBackground': '#151f34',
+    'editor.selectionBackground': '#303f74',
+    'editorCursor.foreground': '#bac6ff',
   },
 });
 
