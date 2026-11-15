@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ProductionChecksTest {
     @Test
-    void acceptsAnExactHttpsOriginAndVerifiedDatabaseTls() {
+    void acceptsAnExactHttpsOriginAndVerifiedDatabaseTlsWithoutABroker() {
         assertThatCode(() -> ProductionChecks.check(env())).doesNotThrowAnyException();
     }
 
@@ -36,6 +36,31 @@ class ProductionChecksTest {
     void requiresAnExecutionBudget() {
         assertThatThrownBy(() -> ProductionChecks.check(env().withProperty("arena.execution.daily-cases", "0")))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("daily-cases");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"amqp://rabbit.example.com", "amqps://user:pass@rabbit.example.com",
+        "amqps://a.example.com,b.example.com", "amqps://rabbit.example.com/vhost"})
+    void rejectsUnsafeBrokerAddresses(String address) {
+        assertThatThrownBy(() -> ProductionChecks.check(broker().withProperty("spring.rabbitmq.addresses", address)))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("CODEARENA_RABBITMQ_URL");
+    }
+
+    @Test
+    void acceptsAnOptionalBrokerWithVerifiedTls() {
+        assertThatCode(() -> ProductionChecks.check(broker())).doesNotThrowAnyException();
+        assertThatThrownBy(() -> ProductionChecks.check(broker().withProperty("spring.rabbitmq.ssl.verify-hostname", "false")))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("hostname verification");
+    }
+
+    private static MockEnvironment broker() {
+        return env().withProperty("arena.execution.rabbitmq", "true")
+            .withProperty("spring.rabbitmq.addresses", "amqps://rabbit.example.com:5671")
+            .withProperty("spring.rabbitmq.username", "arena")
+            .withProperty("spring.rabbitmq.password", "test-rabbit-password")
+            .withProperty("spring.rabbitmq.ssl.enabled", "true")
+            .withProperty("spring.rabbitmq.ssl.validate-server-certificate", "true")
+            .withProperty("spring.rabbitmq.ssl.verify-hostname", "true");
     }
 
     private static MockEnvironment env() {

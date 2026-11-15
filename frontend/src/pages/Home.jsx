@@ -1,13 +1,13 @@
-import { ArrowRight, CalendarDays, CheckCircle2, Code2, Flame, Layers3, Play, Terminal, Trophy, Users, Zap } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, Code2, Compass, Flame, Layers3, Play, Sparkles, Terminal, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../context';
 import { useResource } from '../hooks';
 import { Badge, dateTime, Empty, Metric, Resource, SectionTitle } from '../components/ui';
 
 const steps = [
   { icon: Layers3, title: 'Pick a challenge', text: 'Filter the library by topic and difficulty. Start where you are and work up.' },
   { icon: Terminal, title: 'Write and run', text: 'Use the same workspace for Python, Java, and C++. Try an example or your own input.' },
-  { icon: Trophy, title: 'Submit and compete', text: 'See the judge verdict, track your progress, and earn points in timed contests.' },
+  { icon: Sparkles, title: 'Get unstuck', text: 'Ask for a hint, walk through an approach, or get feedback on your code.' },
+  { icon: Compass, title: 'Build career skills', text: 'Follow a roadmap for interviews, backend engineering, or full stack development.' },
 ];
 
 function CodeIllustration() {
@@ -30,18 +30,17 @@ function CodeIllustration() {
 }
 
 export default function Home() {
-  const { user } = useAuth();
   const totals = useResource('/stats/public');
   const problems = useResource('/problems?size=3');
   const contests = useResource('/contests?status=UPCOMING&size=2');
+  const firstProblem = problems.data?.items[0];
   return <div className="container home">
     <section className="hero">
       <div className="hero-copy">
-        <div className="hero-label"><Zap size={14} /> THE DEVELOPER ARENA</div>
         <h1>Master Coding.<br />Compete. <span>Get Better.</span></h1>
-        <p>Practice programming challenges, sharpen your problem-solving skills, and compete with developers around the world.</p>
+        <p>Practice data structures and algorithms, run your code, and build the skills for your next role.</p>
         <div className="button-row hero-actions">
-          <Link to={user ? '/problems/deduplicate-catalog' : '/register'} className="btn primary"><Play size={17} /> Start Coding</Link>
+          <Link to={firstProblem ? '/problems/' + firstProblem.slug : '/problems'} className="btn primary"><Play size={17} /> Start Coding</Link>
           <Link to="/problems" className="btn secondary">Explore Problems <ArrowRight size={17} /></Link>
         </div>
         <div className="hero-languages"><Code2 size={15} /><span>Python 3</span><b>·</b><span>Java 17</span><b>·</b><span>C++17</span></div>
@@ -71,10 +70,10 @@ export default function Home() {
         </Link>)}</div> : <Empty icon={CalendarDays} title="Upcoming contests will appear here" />}</Resource>
     </section>
     <section className="home-section">
-      <SectionTitle title="How CodeArena works" />
-      <div className="card-grid">{steps.map(({ icon: Icon, title, text }, index) =>
+      <SectionTitle title="How CodeArena works" to="/career" linkLabel="View career roadmaps" />
+      <div className="card-grid two">{steps.map(({ icon: Icon, title, text }) =>
         <article className="panel step-card" key={title}>
-          <div className="card-top"><Icon size={21} /><span className="mono">0{index + 1}</span></div><h3>{title}</h3><p>{text}</p>
+          <div className="card-top"><Icon size={21} /></div><h3>{title}</h3><p>{text}</p>
         </article>)}</div>
     </section>
   </div>;

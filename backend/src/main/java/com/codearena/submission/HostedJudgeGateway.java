@@ -76,9 +76,14 @@ final class HostedJudgeGateway implements JudgeGateway {
         )).toList();
 
         // A failed POST may have accepted jobs already. Never replay it automatically.
-        BatchToken[] response = client.post()
-            .uri(BATCH + "?base64_encoded=true")
-            .body(Map.of("submissions", tests)).retrieve().body(BatchToken[].class);
+        BatchToken[] response;
+        try {
+            response = client.post().uri(BATCH + "?base64_encoded=true")
+                .body(Map.of("submissions", tests)).retrieve().body(BatchToken[].class);
+        } catch (HttpStatusCodeException error) {
+            if (error.getStatusCode().value() == 429) throw new TemporarilyUnavailable();
+            throw error;
+        }
         if (response == null || response.length != tests.size()) throw invalidResponse();
         var unique = new HashSet<String>();
         var tokens = new ArrayList<String>(response.length);

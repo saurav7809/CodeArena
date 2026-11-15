@@ -19,4 +19,8 @@ The local judge requires trusted inputs. A public deployment needs a separate, h
 - [x] Added the Cloud Run source entrypoint and production profile with verified database TLS, exact-origin CORS, and health checks.
 - [x] Added a hosted Judge0 adapter, bounded execution admission, and authentication throttling.
 - [x] Verified both frontend builds and passed 24 Java tests, including real local PostgreSQL and judge integration. The packaged production profile rejected invalid settings at startup.
+- [x] Verified the current 25-problem catalog, saved career progress, idempotent submissions, and public sample output through the native Windows preview.
+- [x] Built the Vercel bundle and passed 42 Java tests on PostgreSQL with the trusted local judge.
+- [x] Made RabbitMQ optional for the Cloud Run source deployment. The default production profile uses the PostgreSQL queue and the hosted judge.
+- [x] Rehearsed the packaged production API against PostgreSQL over verified TLS and a local HTTPS Judge0 test fixture. Verified startup, account registration, CORS, queue dispatch, and the public sample result.
 - [ ] Configure the production database, hosted judge, and secrets. Follow the [deployment guide](docs/deployment.md) to verify the deployed services.

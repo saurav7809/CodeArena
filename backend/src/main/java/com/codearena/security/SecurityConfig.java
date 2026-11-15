@@ -63,7 +63,8 @@ public class SecurityConfig {
         var cors = new CorsConfiguration();
         cors.setAllowedOrigins(List.of(origin));
         cors.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        cors.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        cors.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
+        cors.setExposedHeaders(List.of("X-Request-ID", "Retry-After"));
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", cors);
         return source;
@@ -79,11 +80,14 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(rules -> rules
                 .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                .requestMatchers(HttpMethod.GET, "/actuator/health/liveness", "/actuator/health/readiness").permitAll()
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/users/me", "/api/users/me/**", "/api/auth/me", "/api/auth/logout").authenticated()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/health", "/api/stats/public", "/api/problems", "/api/problems/*",
                     "/api/problems/slug/*", "/api/contests", "/api/contests/*", "/api/contests/*/leaderboard",
+                    "/api/career/roadmaps", "/api/ai/status",
                     "/api/leaderboard/*", "/api/users/*", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .anyRequest().authenticated())
             .oauth2ResourceServer(resource -> resource

@@ -2,6 +2,7 @@ package com.codearena.submission;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpHeaders;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -37,16 +38,23 @@ class SubmissionAdmission {
                  WHERE created_at >= statement_timestamp() - interval '24 hours') AS cases
             """).param("user", userId)
             .query((rs, row) -> new Usage(rs.getLong("active"), rs.getLong("user_jobs"), rs.getLong("cases"))).single();
-        if (usage.active() >= maxActive) throw limited("The judge queue is full. Try again shortly.");
+        if (usage.active() >= maxActive) throw limited("The judge queue is full. Try again shortly.", "5");
         if (perUserPerMinute > 0 && usage.userJobs() >= perUserPerMinute) {
-            throw limited("You have reached the execution limit for this minute.");
+            throw limited("You have reached the execution limit for this minute.", "60");
         }
         if (dailyCases > 0 && usage.cases() + requestedCases > dailyCases) {
-            throw limited("The platform has reached its daily test execution budget.");
+            throw limited("The platform has reached its daily test execution budget.", null);
         }
     }
 
-    private static ResponseStatusException limited(String message) {
-        return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, message);
+    private static ResponseStatusException limited(String message, String retryAfter) {
+        return new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, message) {
+            @Override
+            public HttpHeaders getHeaders() {
+                var headers = new HttpHeaders();
+                if (retryAfter != null) headers.set(HttpHeaders.RETRY_AFTER, retryAfter);
+                return headers;
+            }
+        };
     }
 }

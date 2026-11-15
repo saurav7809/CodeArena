@@ -1,13 +1,13 @@
 import axios from 'axios';
+import { storage } from './storage';
 
 export const apiOrigin = (import.meta.env.VITE_API_URL || '').trim().replace(/\/$/, '');
 export const api = axios.create({ baseURL: apiOrigin + '/api', timeout: 12000 });
-let token = sessionStorage.getItem('arena-token');
+let token = storage.session.get('arena-token');
 
 export function setToken(value) {
   token = value;
-  if (value) sessionStorage.setItem('arena-token', value);
-  else sessionStorage.removeItem('arena-token');
+  storage.session.set('arena-token', value);
 }
 
 export function hasToken() {

@@ -4,6 +4,11 @@ import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
   const apiOrigin = (loadEnv(mode, process.cwd(), 'VITE_').VITE_API_URL || '').trim().replace(/\/$/, '');
+  const apiPort = Number(process.env.CODEARENA_API_PORT || 8080);
+  if (!Number.isInteger(apiPort) || apiPort < 1 || apiPort > 65535) {
+    throw new Error('Set CODEARENA_API_PORT to a valid local API port.');
+  }
+  const localApi = 'http://127.0.0.1:' + apiPort;
   if ((mode === 'deployment' || apiOrigin) && (!apiOrigin.startsWith('https://') || URL.parse(apiOrigin)?.origin !== apiOrigin)) {
     throw new Error('Set VITE_API_URL to the API’s HTTPS origin, without a path.');
   }
@@ -37,11 +42,11 @@ export default defineConfig(({ mode }) => {
       host: '127.0.0.1',
       port: 5173,
       strictPort: true,
-      proxy: { '/api': 'http://127.0.0.1:8080' },
+      proxy: { '/api': localApi },
     },
     preview: {
       host: '127.0.0.1',
-      proxy: { '/api': 'http://127.0.0.1:8080' },
+      proxy: { '/api': localApi },
     },
   };
 });

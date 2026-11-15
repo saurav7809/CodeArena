@@ -1,17 +1,17 @@
 package com.codearena;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.MockMvcPrint;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.MockMvcPrint;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -19,8 +19,11 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -55,6 +58,67 @@ class ArenaIntegrationTest {
             .andExpect(jsonPath("$.examples[0].visible").value(true))
             .andExpect(jsonPath("$.starterCode.JAVA").isString())
             .andExpect(jsonPath("$.starterCode.CPP").isString());
+        http.perform(get("/api/problems/slug/grid-word-search"))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.problem.category").value("Backtracking"))
+            .andExpect(jsonPath("$.examples.length()").value(2));
+    }
+
+    @Test
+    void publicProbesDoNotExposeInternalMetrics() throws Exception {
+        http.perform(get("/actuator/health/liveness")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("UP")).andExpect(jsonPath("$.components").doesNotExist());
+        http.perform(get("/actuator/health/readiness")).andExpect(status().isOk());
+        http.perform(get("/actuator/prometheus")).andExpect(status().isUnauthorized());
+        String learner = register(unique("metrics")).path("token").asText();
+        http.perform(get("/actuator/prometheus").header("Authorization", bearer(learner))).andExpect(status().isForbidden());
+        http.perform(get("/actuator/prometheus").header("Authorization", bearer(admin())))
+            .andExpect(status().isOk()).andExpect(content().string(containsString("jvm_memory_used_bytes")));
+        http.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(" ".repeat(800_000)))
+            .andExpect(status().isPayloadTooLarge()).andExpect(header().exists("X-Request-ID"));
+    }
+
+    @Test
+    void careerProgressIsPrivateAndCanBeCleared() throws Exception {
+        String path = "/api/career/roadmaps";
+        String mark = "/api/career/skills/arrays-and-maps";
+        http.perform(get(path)).andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.tracks.length()").value(3)).andExpect(jsonPath("$.completedSkills").isEmpty());
+        body(put(mark), null, Map.of("completed", true)).andExpect(status().isUnauthorized());
+        String first = register(unique("roadmap")).path("token").asText();
+        String second = register(unique("roadmap")).path("token").asText();
+        for (int i = 0; i < 2; i++) {
+            body(put(mark), first, Map.of("completed", true)).andExpect(status().isNoContent());
+        }
+        http.perform(get(path).header("Authorization", bearer(first))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.completedSkills[0]").value("arrays-and-maps"))
+            .andExpect(jsonPath("$.completedSkills.length()").value(1));
+        http.perform(get(path).header("Authorization", bearer(second))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.completedSkills").isEmpty());
+        body(put("/api/career/skills/missing"), first, Map.of("completed", true)).andExpect(status().isNotFound());
+        body(put(mark), first, Map.of("completed", false)).andExpect(status().isNoContent());
+        http.perform(get(path).header("Authorization", bearer(first))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.completedSkills").isEmpty());
+    }
+
+    @Test
+    void savedCareerPlanCanOnlyBeReadAndRemovedByItsOwner() throws Exception {
+        var owner = register(unique("planner"));
+        String ownerToken = owner.path("token").asString();
+        String otherToken = register(unique("reader")).path("token").asString();
+        long ownerId = owner.path("user").path("id").asLong();
+        jdbc.sql("INSERT INTO career_plans (user_id, track_id, plan_text) VALUES (:id, 'backend', 'Week 1. Build a testable API.')")
+            .param("id", ownerId).update();
+        String path = "/api/career/plans/backend";
+        http.perform(get(path)).andExpect(status().isUnauthorized());
+        http.perform(get(path).header("Authorization", bearer(otherToken))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.text").isEmpty());
+        http.perform(delete(path).header("Authorization", bearer(otherToken))).andExpect(status().isNoContent());
+        http.perform(get(path).header("Authorization", bearer(ownerToken))).andExpect(status().isOk())
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$.text").value("Week 1. Build a testable API."));
+        http.perform(delete(path).header("Authorization", bearer(ownerToken))).andExpect(status().isNoContent());
+        http.perform(get(path).header("Authorization", bearer(ownerToken))).andExpect(status().isOk())
+            .andExpect(jsonPath("$.text").isEmpty());
     }
 
     @Test
@@ -126,6 +190,8 @@ class ArenaIntegrationTest {
         body(post("/api/submissions/submit"), token, good).andExpect(status().isForbidden());
         http.perform(post("/api/contests/" + contest + "/register").header("Authorization", bearer(token)))
             .andExpect(status().isOk()).andExpect(jsonPath("$.contest.registered").value(true));
+        http.perform(get("/api/problems/" + problem)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.coachingEnabled").value(false));
 
         long run = queue("run", token, good);
         JsonNode ran = awaitVerdict(run, token);
@@ -157,6 +223,35 @@ class ArenaIntegrationTest {
         body(post("/api/submissions/run"), token, good).andExpect(status().isTooManyRequests());
         http.perform(get("/api/submissions/" + accepted).header("Authorization", bearer(register(unique("observer")).path("token").asText())))
             .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @EnabledIfEnvironmentVariable(named = "CODEARENA_TEST_JUDGE", matches = "1")
+    void duplicateRequestsShareOneJobAndItsResultContainsNoSource() throws Exception {
+        String learner = register(unique("retry")).path("token").asText();
+        long problem = read(http.perform(get("/api/problems/slug/recursive-digit-sum")).andExpect(status().isOk()))
+            .path("problem").path("id").asLong();
+        String key = UUID.randomUUID().toString();
+        var valid = Map.of("problemId", problem, "language", "PYTHON", "code", "print(sum(map(int, input())))");
+        Callable<Long> send = () -> read(body(post("/api/submissions/submit").header("Idempotency-Key", key),
+            learner, valid).andExpect(status().isAccepted())).path("id").asLong();
+        var pool = Executors.newFixedThreadPool(2);
+        long id;
+        try {
+            var both = pool.invokeAll(List.of(send, send));
+            id = both.get(0).get();
+            assertThat(both.get(1).get()).isEqualTo(id);
+        } finally {
+            pool.shutdownNow();
+        }
+        body(post("/api/submissions/run").header("Idempotency-Key", key), learner, valid)
+            .andExpect(status().isConflict());
+        assertThat(awaitVerdict(id, learner).path("submission").path("verdict").asString()).isEqualTo("ACCEPTED");
+        http.perform(get("/api/submissions/" + id + "/result").header("Authorization", bearer(learner)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.code").doesNotExist())
+            .andExpect(jsonPath("$.submission.passedCases").value(4));
+        http.perform(get("/api/submissions").header("Authorization", bearer(learner)))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.total").value(1));
     }
 
     private long queue(String action, String token, Map<String, ?> data) throws Exception {

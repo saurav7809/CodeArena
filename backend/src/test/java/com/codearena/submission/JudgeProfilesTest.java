@@ -41,4 +41,11 @@ class JudgeProfilesTest {
             assertThat(app.getStartupFailure()).hasRootCauseMessage(
                 "The trusted development judge requires a loopback API bind and judge URL."));
     }
+
+    @Test
+    void composeUsesTheInternalJudgeHostname() {
+        context.withPropertyValues("spring.profiles.active=compose", "server.address=0.0.0.0",
+            "arena.judge-url=http://judge:8091")
+            .run(app -> assertThat(app).hasSingleBean(JudgeGateway.class));
+    }
 }

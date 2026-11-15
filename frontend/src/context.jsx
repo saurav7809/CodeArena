@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api, hasToken, setToken } from './api';
+import { storage } from './storage';
 
 const AuthContext = createContext(null);
 const AppContext = createContext(null);
@@ -7,7 +8,7 @@ const AppContext = createContext(null);
 export function Providers({ children }) {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(hasToken);
-  const [theme, setTheme] = useState(() => localStorage.getItem('arena-theme') === 'light' ? 'light' : 'dark');
+  const [theme, setTheme] = useState(() => storage.local.get('arena-theme') === 'light' ? 'light' : 'dark');
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
@@ -28,7 +29,7 @@ export function Providers({ children }) {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem('arena-theme', theme);
+    storage.local.set('arena-theme', theme);
   }, [theme]);
 
   useEffect(() => {

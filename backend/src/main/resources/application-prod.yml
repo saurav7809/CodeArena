@@ -17,6 +17,10 @@ spring:
       minimum-idle: 1
       connection-timeout: 3000
       validation-timeout: 1500
+logging:
+  structured:
+    format:
+      console: ecs
 springdoc:
   api-docs:
     enabled: false
@@ -32,6 +36,30 @@ arena:
     java-id: ${CODEARENA_JUDGE0_JAVA_ID}
     cpp-id: ${CODEARENA_JUDGE0_CPP_ID}
   execution:
+    workers: ${CODEARENA_EXECUTION_WORKERS:2}
+    shutdown-timeout-ms: 6500
     max-active: ${CODEARENA_MAX_ACTIVE_JOBS:16}
     per-user-per-minute: ${CODEARENA_JOBS_PER_USER_PER_MINUTE:6}
     daily-cases: ${CODEARENA_DAILY_CASE_LIMIT:400}
+---
+spring:
+  config:
+    activate:
+      on-profile: rabbitmq
+  rabbitmq:
+    addresses: ${CODEARENA_RABBITMQ_URL}
+    username: ${CODEARENA_RABBITMQ_USER}
+    password: ${CODEARENA_RABBITMQ_PASSWORD}
+    ssl:
+      enabled: true
+      validate-server-certificate: true
+      verify-hostname: true
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db,rabbit
+arena:
+  execution:
+    rabbitmq: true

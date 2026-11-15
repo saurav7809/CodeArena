@@ -6,9 +6,12 @@ import java.time.Duration;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
 @Component
 @Profile("!prod")
@@ -19,12 +22,15 @@ class LocalJudgeGateway implements JudgeGateway {
 
     LocalJudgeGateway(RestClient.Builder builder, @Value("${arena.judge-url}") String judgeUrl,
                       @Value("${arena.judge-token}") String token,
-                      @Value("${server.address}") String serverAddress) {
+                      @Value("${server.address}") String serverAddress, Environment environment) {
         URI uri = URI.create(judgeUrl);
-        if (!"http".equals(uri.getScheme()) || uri.getHost() == null
-            || !LOOPBACK.contains(uri.getHost()) || !LOOPBACK.contains(serverAddress)
-            || uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null) {
-            throw new IllegalArgumentException("The trusted development judge requires a loopback API bind and judge URL.");
+        boolean compose = environment.acceptsProfiles(Profiles.of("compose"));
+        boolean allowedHost = compose ? "judge".equals(uri.getHost())
+            : uri.getHost() != null && LOOPBACK.contains(uri.getHost()) && LOOPBACK.contains(serverAddress);
+        if (!"http".equals(uri.getScheme()) || !allowedHost || uri.getUserInfo() != null
+            || uri.getQuery() != null || uri.getFragment() != null) {
+            throw new IllegalArgumentException(compose ? "The Compose judge URL must use the internal judge hostname."
+                : "The trusted development judge requires a loopback API bind and judge URL.");
         }
         var transport = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(3)).build());
@@ -38,6 +44,11 @@ class LocalJudgeGateway implements JudgeGateway {
 
     @Override
     public Result execute(Job job) {
-        return client.post().uri("/execute").header("X-Judge-Token", token).body(job).retrieve().body(Result.class);
+        try {
+            return client.post().uri("/execute").header("X-Judge-Token", token).body(job).retrieve().body(Result.class);
+        } catch (RestClientResponseException error) {
+            if (error.getStatusCode().value() == 429) throw new TemporarilyUnavailable();
+            throw error;
+        }
     }
 }

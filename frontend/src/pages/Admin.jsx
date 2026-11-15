@@ -191,7 +191,8 @@ function ProblemForm({ initial, id }) {
     setBusy(true);
     try {
       const body = { ...fields, timeLimitMs: Number(fields.timeLimitMs), memoryLimitMb: Number(fields.memoryLimitMb),
-        published: fields.published === 'on', testCases: tests.map(({ input, expectedOutput, visible }) => ({ input, expectedOutput, visible })) };
+        published: fields.published === 'on', coachingEnabled: fields.coachingEnabled === 'on',
+        testCases: tests.map(({ input, expectedOutput, visible }) => ({ input, expectedOutput, visible })) };
       if (id) await api.put('/admin/problems/' + id, body);
       else await api.post('/admin/problems', body);
       notify(id ? 'Problem updated.' : 'Problem created.');
@@ -217,7 +218,11 @@ function ProblemForm({ initial, id }) {
         <label>Time limit (ms)<input type="number" name="timeLimitMs" min={500} max={5000} required defaultValue={initial?.timeLimitMs || 2000} /></label>
         <label>Memory limit (MB)<input type="number" name="memoryLimitMb" min={64} max={512} required defaultValue={initial?.memoryLimitMb || 128} /></label>
       </div>
-      <label className="checkbox-label"><input type="checkbox" name="published" defaultChecked={base?.published} />Publish this problem</label>
+      <div className="button-row">
+        <label className="checkbox-label"><input type="checkbox" name="published" defaultChecked={base?.published} />Publish this problem</label>
+        <label className="checkbox-label"><input type="checkbox" name="coachingEnabled"
+          defaultChecked={initial?.coachingEnabled ?? true} />Allow AI coaching in practice</label>
+      </div>
     </section>
     <section className="panel padded">
       <SectionTitle title="Test cases" description="A published problem needs at least one sample and one hidden test." />

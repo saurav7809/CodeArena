@@ -31,6 +31,7 @@ class ProductionChecks {
         checkDatabaseUrl(required(env, "spring.datasource.url", "CODEARENA_DB_URL"));
         required(env, "spring.datasource.username", "CODEARENA_DB_USER");
         required(env, "spring.datasource.password", "CODEARENA_DB_PASSWORD");
+        if (env.getProperty("arena.execution.rabbitmq", Boolean.class, false)) checkBroker(env);
         String admin = env.getProperty("arena.admin-password", "");
         if (!admin.isBlank() && admin.length() < 16) {
             throw new IllegalArgumentException("Use at least 16 characters for CODEARENA_ADMIN_PASSWORD in production.");
@@ -38,6 +39,28 @@ class ProductionChecks {
         for (String key : new String[]{"max-active", "per-user-per-minute", "daily-cases"}) {
             if (env.getProperty("arena.execution." + key, Integer.class, 0) < 1) {
                 throw new IllegalArgumentException("Production requires a positive arena.execution." + key + " limit.");
+            }
+        }
+    }
+
+    private static void checkBroker(Environment env) {
+        String settings = required(env, "spring.rabbitmq.addresses", "CODEARENA_RABBITMQ_URL");
+        String error = "Set CODEARENA_RABBITMQ_URL to one amqps:// broker address without embedded credentials.";
+        URI uri = parseUri(settings, error);
+        if (!"amqps".equals(uri.getScheme()) || uri.getHost() == null || uri.getRawUserInfo() != null
+            || uri.getRawQuery() != null || uri.getRawFragment() != null
+            || !uri.getRawPath().isEmpty()
+            || (uri.getPort() != -1 && (uri.getPort() < 1 || uri.getPort() > 65535))) {
+            throw new IllegalArgumentException(error);
+        }
+        String username = required(env, "spring.rabbitmq.username", "CODEARENA_RABBITMQ_USER");
+        String password = required(env, "spring.rabbitmq.password", "CODEARENA_RABBITMQ_PASSWORD");
+        if (username.equalsIgnoreCase("guest") || password.equals("guest")) {
+            throw new IllegalArgumentException("Use a dedicated RabbitMQ credential in production.");
+        }
+        for (String key : new String[]{"enabled", "validate-server-certificate", "verify-hostname"}) {
+            if (!env.getProperty("spring.rabbitmq.ssl." + key, Boolean.class, false)) {
+                throw new IllegalArgumentException("Production requires RabbitMQ TLS and hostname verification.");
             }
         }
     }

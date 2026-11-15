@@ -1,0 +1,13 @@
+server:
+  address: 0.0.0.0
+  shutdown: graceful
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: readinessState,db,rabbit
+arena:
+  execution:
+    max-active: 16
+    per-user-per-minute: 6

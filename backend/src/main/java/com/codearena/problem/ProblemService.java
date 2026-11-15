@@ -11,9 +11,11 @@ import jakarta.validation.constraints.Size;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -29,10 +31,7 @@ public class ProblemService {
                 AND x.mode = 'SUBMIT' AND x.verdict = 'ACCEPTED')
         """;
     private static final String STATS = """
-        LEFT JOIN LATERAL (
-            SELECT count(*) AS submissions, count(*) FILTER (WHERE verdict = 'ACCEPTED') AS accepted
-            FROM submissions s WHERE s.problem_id = p.id AND s.mode = 'SUBMIT'
-        ) totals ON true
+        LEFT JOIN problem_statistics totals ON totals.problem_id = p.id
         """;
     private static final Map<String, String> STARTERS = Map.of(
         "PYTHON", """
@@ -71,15 +70,20 @@ public class ProblemService {
             """);
 
     private final JdbcClient jdbc;
+    private final boolean coachingLock;
 
-    public ProblemService(JdbcClient jdbc) { this.jdbc = jdbc; }
+    public ProblemService(JdbcClient jdbc, @Value("${arena.ai.lock-active-contest:true}") boolean coachingLock) {
+        this.jdbc = jdbc;
+        this.coachingLock = coachingLock;
+    }
 
     public record Card(long id, String slug, String title, String difficulty, String category, boolean solved,
                        long submissions, long accepted, boolean published, Instant createdAt) {}
+    public record PracticeLink(String slug, String title, boolean solved) {}
     public record TestCase(int position, String input, String expectedOutput, boolean visible) {}
     public record Detail(Card problem, String description, String inputFormat, String outputFormat,
                          String constraints, String explanation, int timeLimitMs, int memoryLimitMb,
-                         Map<String, String> starterCode, List<TestCase> examples, Instant updatedAt) {}
+                         Map<String, String> starterCode, List<TestCase> examples, Instant updatedAt, boolean coachingEnabled) {}
     public record TestInput(@NotNull @Size(max = 8192) String input,
                             @NotNull @Size(max = 8192) String expectedOutput, boolean visible) {}
     public record Edit(
@@ -95,7 +99,8 @@ public class ProblemService {
         @Min(500) @Max(5000) int timeLimitMs,
         @Min(64) @Max(512) int memoryLimitMb,
         boolean published,
-        @NotNull @Size(max = 12) List<@NotNull @Valid TestInput> testCases) {}
+        @NotNull @Size(max = 12) List<@NotNull @Valid TestInput> testCases,
+        Boolean coachingEnabled) {}
 
     public PageResult<Card> browse(long viewer, String search, String difficulty, String category, String solved,
                                    String sort, int page, int size, boolean admin) {
@@ -121,7 +126,8 @@ public class ProblemService {
         var parameters = Map.of("admin", admin, "search", search.strip(), "difficulty",
             difficulty.toUpperCase(Locale.ROOT), "category", category, "viewer", viewer);
         long total = jdbc.sql("SELECT count(*) FROM problems p " + where).params(parameters).query(Long.class).single();
-        var rows = jdbc.sql("SELECT p.*, " + SOLVED + " AS solved, totals.* FROM problems p " + STATS + where
+        var rows = jdbc.sql("SELECT p.*, " + SOLVED + " AS solved, totals.judged AS submissions, totals.accepted FROM problems p "
+            + STATS + where
             + " ORDER BY " + order + " LIMIT :size OFFSET :offset")
             .params(parameters).param("size", size).param("offset", offset).query(ProblemService::card).list();
         return new PageResult<>(rows, page, size, total);
@@ -133,17 +139,31 @@ public class ProblemService {
 
     public Detail bySlug(String slug, long viewer) { return detail("p.slug = :key", slug, viewer, false); }
 
+    public List<PracticeLink> practiceLinks(Collection<String> slugs, long viewer) {
+        if (slugs.isEmpty()) return List.of();
+        return jdbc.sql("SELECT p.slug, p.title, " + SOLVED + " AS solved FROM problems p"
+            + " WHERE p.published AND NOT p.archived AND p.slug IN (:slugs)")
+            .param("slugs", slugs).param("viewer", viewer)
+            .query((rs, row) -> new PracticeLink(rs.getString("slug"), rs.getString("title"), rs.getBoolean("solved")))
+            .list();
+    }
+
     private Detail detail(String condition, Object key, long viewer, boolean admin) {
-        var row = jdbc.sql("SELECT p.*, " + SOLVED + " AS solved, totals.* FROM problems p " + STATS
+        var row = jdbc.sql("SELECT p.*, " + SOLVED + " AS solved, totals.judged AS submissions, totals.accepted, "
+            + "(p.coaching_enabled AND (:admin OR NOT :coachingLock OR NOT EXISTS (SELECT 1 FROM contest_problems cp"
+            + " JOIN contests c ON c.id = cp.contest_id WHERE cp.problem_id = p.id AND c.state = 'PUBLISHED'"
+            + " AND now() >= c.starts_at AND now() < c.ends_at))) AS coaching_available FROM problems p " + STATS
             + " WHERE NOT p.archived AND (:admin OR p.published) AND " + condition)
-            .param("key", key).param("viewer", viewer).param("admin", admin).query((rs, index) -> new Detail(
+            .param("key", key).param("viewer", viewer).param("admin", admin).param("coachingLock", coachingLock)
+            .query((rs, index) -> new Detail(
                 card(rs, index), rs.getString("description"), rs.getString("input_format"), rs.getString("output_format"),
                 rs.getString("constraints_text"), rs.getString("explanation"), rs.getInt("time_limit_ms"),
-                rs.getInt("memory_limit_mb"), STARTERS, List.of(), rs.getTimestamp("updated_at").toInstant()))
+                rs.getInt("memory_limit_mb"), STARTERS, List.of(), rs.getTimestamp("updated_at").toInstant(),
+                rs.getBoolean("coaching_available")))
             .optional().orElseThrow(ProblemService::missing);
         return new Detail(row.problem(), row.description(), row.inputFormat(), row.outputFormat(), row.constraints(),
             row.explanation(), row.timeLimitMs(), row.memoryLimitMb(), row.starterCode(),
-            cases(row.problem().id(), admin), row.updatedAt());
+            cases(row.problem().id(), admin), row.updatedAt(), row.coachingEnabled());
     }
 
     public List<TestCase> cases(long problemId, boolean includeHidden) {
@@ -160,9 +180,9 @@ public class ProblemService {
         validate(request);
         long id = fields("""
             INSERT INTO problems (title, slug, description, difficulty, category, input_format, output_format,
-                constraints_text, explanation, time_limit_ms, memory_limit_mb, published)
+                constraints_text, explanation, time_limit_ms, memory_limit_mb, published, coaching_enabled)
             VALUES (:title, :slug, :description, :difficulty, :category, :input, :output, :constraints, :explanation,
-                :time, :memory, :published) RETURNING id
+                :time, :memory, :published, coalesce(:coaching, true)) RETURNING id
             """, request).query(Long.class).single();
         writeCases(id, request.testCases());
         return byId(id, 0, true);
@@ -177,7 +197,7 @@ public class ProblemService {
             UPDATE problems SET title = :title, slug = :slug, description = :description, difficulty = :difficulty,
                 category = :category, input_format = :input, output_format = :output, constraints_text = :constraints,
                 explanation = :explanation, time_limit_ms = :time, memory_limit_mb = :memory, published = :published,
-                updated_at = now()
+                coaching_enabled = coalesce(:coaching, coaching_enabled), updated_at = now()
             WHERE id = :id
             """, request).param("id", id).update();
         jdbc.sql("DELETE FROM problem_test_cases WHERE problem_id = :id").param("id", id).update();
@@ -198,6 +218,11 @@ public class ProblemService {
             .query(Long.class).optional().orElseThrow(ProblemService::missing);
     }
 
+    public void lockForExecution(long id) {
+        jdbc.sql("SELECT id FROM problems WHERE id = :id AND published AND NOT archived FOR SHARE").param("id", id)
+            .query(Long.class).optional().orElseThrow(ProblemService::missing);
+    }
+
     private void ensureNoActiveContest(long id) {
         boolean inContest = jdbc.sql("""
             SELECT EXISTS (SELECT 1 FROM contest_problems cp JOIN contests c ON c.id = cp.contest_id
@@ -212,7 +237,8 @@ public class ProblemService {
             .param("category", request.category()).param("input", request.inputFormat().strip())
             .param("output", request.outputFormat().strip()).param("constraints", request.constraints().strip())
             .param("explanation", request.explanation() == null ? "" : request.explanation().strip())
-            .param("time", request.timeLimitMs()).param("memory", request.memoryLimitMb()).param("published", request.published());
+            .param("time", request.timeLimitMs()).param("memory", request.memoryLimitMb()).param("published", request.published())
+            .param("coaching", request.coachingEnabled(), java.sql.Types.BOOLEAN);
     }
 
     private void writeCases(long id, List<TestInput> cases) {

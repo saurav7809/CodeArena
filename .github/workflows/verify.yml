@@ -1,0 +1,117 @@
+name: Verify CodeArena
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      db:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: codearena_test
+          POSTGRES_USER: codearena
+          POSTGRES_PASSWORD: ci-db-password
+        ports: [5432/tcp]
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U codearena -d codearena_test"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      broker:
+        image: rabbitmq:4.4.0-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: codearena
+          RABBITMQ_DEFAULT_PASS: ci-broker-password
+        ports: [5672/tcp]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q check_port_listener 5672"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: judge-service/requirements.txt
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Test the Windows and Linux compatible judge
+        working-directory: judge-service
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip check
+          python -m unittest discover -s tests -v
+      - name: Verify the Java API, RabbitMQ, and judge together
+        env:
+          CODEARENA_TEST_DB_URL: jdbc:postgresql://127.0.0.1:${{ job.services.db.ports['5432'] }}/codearena_test
+          CODEARENA_DB_PASSWORD: ci-db-password
+          CODEARENA_JUDGE_TOKEN: ci-judge-token-at-least-32-characters
+          CODEARENA_TRUST_LOCAL_CODE: '1'
+          CODEARENA_TEST_JUDGE: '1'
+          CODEARENA_JUDGE_CONCURRENCY: '2'
+          CODEARENA_EXECUTION_RABBITMQ: 'true'
+          CODEARENA_EXECUTION_WORKERS: '2'
+          CODEARENA_RABBITMQ_PORT: ${{ job.services.broker.ports['5672'] }}
+          CODEARENA_RABBITMQ_USER: codearena
+          CODEARENA_RABBITMQ_PASSWORD: ci-broker-password
+        run: |
+          python -m uvicorn app.main:app --app-dir judge-service --host 127.0.0.1 --port 8091 --no-proxy-headers > "$RUNNER_TEMP/judge.log" 2>&1 &
+          judge_pid=$!
+          trap 'kill "$judge_pid" 2>/dev/null || true' EXIT
+          curl --fail --retry 12 --retry-all-errors --retry-delay 1 --silent --show-error http://127.0.0.1:8091/health
+          mvn --batch-mode --no-transfer-progress -f backend/pom.xml verify
+      - name: Build the frontend and check dependencies
+        working-directory: frontend
+        env:
+          VITE_API_URL: https://api.example.test
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm run build:deploy
+
+  compose-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CODEARENA_WEB_PORT: '8088'
+      CODEARENA_DB_PASSWORD: ci-compose-db-password
+      CODEARENA_RABBITMQ_PASSWORD: ci-compose-broker-password
+      CODEARENA_JWT_SECRET: ci-compose-signing-key-at-least-32-characters
+      CODEARENA_JUDGE_TOKEN: ci-compose-judge-key-at-least-32-characters
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Build and start the five containers
+        run: |
+          docker compose config --quiet
+          docker compose up --build --wait --wait-timeout 120
+      - name: Verify the browser origin through nginx
+        run: node scripts/smoke-execution.mjs http://127.0.0.1:8088
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --tail=120
+      - name: Stop the disposable stack
+        if: always()
+        run: docker compose down --volumes

@@ -1,12 +1,28 @@
 # CodeArena
 
-CodeArena is a local competitive programming platform. Browse 20 seeded problems, write solutions in Monaco, run examples or custom input, and submit solutions for automated judging. Real submissions drive the dashboard, achievements, and global and contest rankings.
+CodeArena is a DSA practice platform. Browse programming problems, write solutions in Monaco, run examples or custom input, and submit solutions for automated judging. The AI coach offers progressive hints, explanations, and a review of your current draft. Career roadmaps link to practice problems and track skills for coding interviews, backend engineering, and full stack development.
 
-The app uses React, Vite, Tailwind CSS, and Recharts for the frontend. The Java 17 and Spring Boot 3.5 API uses PostgreSQL, Flyway, BCrypt, and signed JWTs. A separate Python service compiles and executes Python 3, Java 17, and C++17 submissions. See [architecture](docs/architecture.md), [schema](docs/database-schema.md), [API reference](docs/api-documentation.md), and [development progress](DEVELOPMENT_PROGRESS.md).
+The app uses React and Spring Boot with PostgreSQL. RabbitMQ dispatches execution jobs to a bounded worker pool in the Docker setup. A separate judge compiles and executes Python 3, Java 17, and C++17 submissions. See the [architecture](docs/architecture.md), [schema](docs/database-schema.md), and [API reference](docs/api-documentation.md).
 
-For a hosted demo, follow the [Vercel and Cloud Run deployment guide](docs/deployment.md). The production profile uses a private hosted sandbox.
+For a hosted demo, use the Vercel and Cloud Run source deployment with managed PostgreSQL and a private hosted sandbox. [Deployment guide](docs/deployment.md)
 
-## Prerequisites
+## Start with Docker
+
+Use Docker Compose with Linux containers. Copy `.env.example` to `.env` and set `CODEARENA_DB_PASSWORD`, `CODEARENA_RABBITMQ_PASSWORD`, `CODEARENA_JWT_SECRET`, and `CODEARENA_JUDGE_TOKEN`. Use at least 32 characters for the JWT secret and judge token.
+
+```powershell
+Copy-Item .env.example .env
+# Fill in the four settings in .env before starting the services.
+docker compose up --build --wait
+```
+
+Open [CodeArena](http://127.0.0.1:8088/) and register a learner account. You can change the local web port with `CODEARENA_WEB_PORT`. Compose starts two concurrent consumers and aligns the judge slots with `CODEARENA_EXECUTION_WORKERS`. The API, broker, database, and judge use private container networking. Only the browser app is published, on loopback. The Compose judge is for trusted local use. Use the hosted judge profile for public deployments.
+
+Run `docker compose down` to stop the app. PostgreSQL and RabbitMQ data persist in named volumes.
+
+For a disposable Compose instance, run `node scripts/smoke-execution.mjs http://127.0.0.1:8088` to verify signup, retry deduplication, verdicts, and public sample output. This creates a test account and submission. Use the [deployment guide](docs/deployment.md) for managed services, health probes, monitoring, and staging checks.
+
+## Windows setup without Docker
 
 - Windows PowerShell or PowerShell 7
 - Node.js 22.12 or newer and npm
@@ -14,8 +30,6 @@ For a hosted demo, follow the [Vercel and Cloud Run deployment guide](docs/deplo
 - Python 3.11 or newer
 - Locally installed PostgreSQL with `psql`, `initdb`, `pg_ctl`, and `createdb` on PATH
 - A C++17 compiler, such as MinGW-w64 `g++`. Set `CODEARENA_CXX` to the absolute compiler path if it is outside PATH.
-
-## Start locally
 
 From the repository root, install dependencies and initialize a dedicated local PostgreSQL instance.
 
@@ -35,6 +49,8 @@ Run the API from the repository root in a new terminal.
 mvn.cmd -f backend/pom.xml spring-boot:run '-Dspring-boot.run.jvmArguments=-Xms64m -Xmx384m'
 ```
 
+The native setup uses the PostgreSQL queue by default. To use a running RabbitMQ broker, set `CODEARENA_EXECUTION_RABBITMQ=true` and configure `CODEARENA_RABBITMQ_HOST`, `CODEARENA_RABBITMQ_PORT`, `CODEARENA_RABBITMQ_USER`, and `CODEARENA_RABBITMQ_PASSWORD` before starting the API. If you change the worker count, set `CODEARENA_JUDGE_CONCURRENCY` to the same value in the judge terminal. Set `OPENAI_API_KEY` in the API terminal to enable the coach.
+
 Start the judge in a second terminal when you are ready to run your own trusted solutions. If your compiler is outside PATH, set `CODEARENA_CXX` in this terminal.
 
 ```powershell
@@ -52,6 +68,10 @@ npm.cmd --prefix frontend run dev
 Open [CodeArena](http://127.0.0.1:5173/). Create a regular account to practice. The setup script seeds the development admin with username `arena_admin` and the password in `CODEARENA_ADMIN_PASSWORD` in your local environment file. Admin creation only occurs when the password is set and the account does not already exist. Keep the generated values local.
 
 Stop the app and judge with Ctrl+C in their terminals. Stop the workspace PostgreSQL instance with `pg_ctl.exe stop -D .local/postgres -m fast`.
+
+## AI coach
+
+Set `OPENAI_API_KEY` in the API environment or the Compose `.env` to enable hints, explanations, code review, and personalized four-week career plans. The server uses the OpenAI Responses API with `gpt-5.4-mini` by default. Set `CODEARENA_AI_MODEL` to change the model. For practice requests, the coach sends the public problem statement and up to two samples. Code review includes the current draft. Career guidance uses the selected track, completed skills, and form answers. Learners can reopen or remove saved plans. [OpenAI Responses API](https://developers.openai.com/api/reference/resources/responses/methods/create)
 
 ## Judge scope
 

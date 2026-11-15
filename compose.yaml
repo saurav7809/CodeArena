@@ -1,0 +1,118 @@
+services:
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${CODEARENA_WEB_PORT:-8088}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    restart: unless-stopped
+    stop_grace_period: 110s
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.compose
+    environment:
+      SPRING_PROFILES_ACTIVE: compose
+      CODEARENA_FRONTEND_ORIGIN: http://127.0.0.1:${CODEARENA_WEB_PORT:-8088}
+      CODEARENA_DB_URL: jdbc:postgresql://db:5432/codearena
+      CODEARENA_DB_USER: codearena
+      CODEARENA_DB_PASSWORD: "${CODEARENA_DB_PASSWORD:?Set CODEARENA_DB_PASSWORD in .env}"
+      CODEARENA_JWT_SECRET: "${CODEARENA_JWT_SECRET:?Set CODEARENA_JWT_SECRET in .env}"
+      CODEARENA_ADMIN_PASSWORD: "${CODEARENA_ADMIN_PASSWORD:-}"
+      CODEARENA_JUDGE_URL: http://judge:8091
+      CODEARENA_JUDGE_TOKEN: "${CODEARENA_JUDGE_TOKEN:?Set CODEARENA_JUDGE_TOKEN in .env}"
+      CODEARENA_EXECUTION_RABBITMQ: "true"
+      CODEARENA_EXECUTION_WORKERS: "${CODEARENA_EXECUTION_WORKERS:-2}"
+      CODEARENA_RABBITMQ_HOST: rabbitmq
+      CODEARENA_RABBITMQ_USER: codearena
+      CODEARENA_RABBITMQ_PASSWORD: "${CODEARENA_RABBITMQ_PASSWORD:?Set CODEARENA_RABBITMQ_PASSWORD in .env}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      CODEARENA_AI_MODEL: "${CODEARENA_AI_MODEL:-gpt-5.4-mini}"
+      CODEARENA_AI_USER_PER_MINUTE: "${CODEARENA_AI_USER_PER_MINUTE:-4}"
+      CODEARENA_AI_DAILY_LIMIT: "${CODEARENA_AI_DAILY_LIMIT:-200}"
+      CODEARENA_AI_CONCURRENT: "${CODEARENA_AI_CONCURRENT:-4}"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      judge:
+        condition: service_healthy
+    networks: [default, execution]
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/actuator/health/readiness"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 15s
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: codearena
+      POSTGRES_USER: codearena
+      POSTGRES_PASSWORD: "${CODEARENA_DB_PASSWORD:?Set CODEARENA_DB_PASSWORD in .env}"
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "codearena", "-d", "codearena"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rabbitmq:
+    image: rabbitmq:4.4.0-alpine
+    restart: unless-stopped
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: codearena
+      RABBITMQ_DEFAULT_PASS: "${CODEARENA_RABBITMQ_PASSWORD:?Set CODEARENA_RABBITMQ_PASSWORD in .env}"
+    volumes:
+      - broker:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_port_listener", "5672"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+
+  judge:
+    build: ./judge-service
+    restart: unless-stopped
+    stop_grace_period: 100s
+    environment:
+      CODEARENA_JUDGE_CONTAINER: "1"
+      CODEARENA_TRUST_LOCAL_CODE: "1"
+      CODEARENA_JUDGE_TOKEN: "${CODEARENA_JUDGE_TOKEN:?Set CODEARENA_JUDGE_TOKEN in .env}"
+      CODEARENA_JUDGE_CONCURRENCY: "${CODEARENA_EXECUTION_WORKERS:-2}"
+    networks: [execution]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs:
+      - /tmp:rw,exec,nosuid,nodev,size=128m,mode=1777
+    mem_limit: 2g
+    pids_limit: 256
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json, urllib.request; data = json.load(urllib.request.urlopen('http://127.0.0.1:8091/health', timeout=2)); raise SystemExit(not (data['enabled'] and all(data['languages'].values())))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+networks:
+  execution:
+    internal: true
+
+volumes:
+  database:
+  broker:

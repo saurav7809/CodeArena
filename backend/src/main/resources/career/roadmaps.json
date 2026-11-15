@@ -1,0 +1,99 @@
+[
+  {
+    "id": "interview",
+    "title": "Coding interviews",
+    "description": "Recognize common DSA patterns, explain your reasoning, and practice under a time limit.",
+    "milestones": [
+      {
+        "title": "Build the foundations",
+        "description": "Get comfortable turning a prompt into a correct program and describing its cost.",
+        "skills": [
+          {"id":"arrays-and-maps","title":"Arrays and hash maps","description":"Track counts, membership, and first occurrences in one pass. Use prefix sums for range queries.","problems":["deduplicate-catalog","category-counts","budget-pair","range-sum-queries"]},
+          {"id":"search-and-complexity","title":"Binary search and complexity","description":"State the search invariant and compare the time and space costs of linear and binary search.","problems":["warehouse-pick","first-match"]}
+        ]
+      },
+      {
+        "title": "Learn common patterns",
+        "description": "Identify what changes as you scan a sequence, process an interval, or visit a graph.",
+        "skills": [
+          {"id":"sequence-patterns","title":"Stacks, two pointers, and sliding windows","description":"Practice nested matching, moving pointers inward, and maintaining a window invariant.","problems":["packing-check","catalog-palindrome","unique-window"]},
+          {"id":"lists-and-trees","title":"Linked lists and trees","description":"Practice changing links without losing the rest of the list and following child links to traverse a tree.","problems":["reverse-linked-list","binary-tree-depth"]},
+          {"id":"intervals-and-greedy","title":"Intervals and greedy choices","description":"Sort intervals by the relevant endpoint and explain why each choice is safe.","problems":["merge-delivery-windows","schedule-deliveries"]},
+          {"id":"graph-traversal","title":"Graph traversal","description":"Use BFS for shortest paths in unweighted graphs and a visited set for connected components.","problems":["shortest-aisle-route","count-islands"]}
+        ]
+      },
+      {
+        "title": "Prepare for the interview",
+        "description": "Practice coming up with an approach out loud before writing code.",
+        "skills": [
+          {"id":"recursion-and-backtracking","title":"Recursion and backtracking","description":"Define a base case and a smaller subproblem. Undo a choice when a search path fails.","problems":["recursive-digit-sum","grid-word-search"]},
+          {"id":"dynamic-programming","title":"Dynamic programming","description":"Define a state, base case, and transition. Check unreachable states and estimate complexity.","problems":["max-subarray","minimum-bundles","shipping-paths"]},
+          {"id":"mock-interview","title":"Timed mock interview","description":"Solve one problem in 35 minutes. Spend the final five minutes testing edge cases and justifying complexity.","problems":["top-requested-skus","rotate-array"]}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "backend",
+    "title": "Backend engineering",
+    "description": "Build a service with a database, background jobs, and a deployment you can explain.",
+    "milestones": [
+      {
+        "title": "Build an API",
+        "description": "Pick a domain such as jobs, inventory, or tasks and expose it through a small REST service.",
+        "skills": [
+          {"id":"http-api","title":"HTTP APIs and validation","description":"Create, list, and update resources. Validate input and return useful status codes and errors.","problems":[]},
+          {"id":"sql-transactions","title":"SQL and transactions","description":"Model related tables, write a join, and make a change that updates two tables in one transaction.","problems":[]}
+        ]
+      },
+      {
+        "title": "Process jobs in the background",
+        "description": "Add a queued task and give clients a way to check its status.",
+        "skills": [
+          {"id":"message-queues","title":"Message queues and worker pools","description":"Use RabbitMQ to hand jobs to bounded consumers. Acknowledge a job after its result is saved.","problems":[]},
+          {"id":"reliable-integrations","title":"Retries and idempotency","description":"Give each job a stable identifier and verify that delivering the same job twice changes state only once.","problems":[]}
+        ]
+      },
+      {
+        "title": "Package and demonstrate",
+        "description": "Make it possible for someone else to run the service and follow a job from request to result.",
+        "skills": [
+          {"id":"docker-deployment","title":"Docker and service health","description":"Start your app and dependencies with Compose. Add health checks and configure secrets through the environment.","problems":[]},
+          {"id":"backend-portfolio","title":"Backend portfolio project","description":"Record a short demo and explain the schema, job lifecycle, and one tradeoff you made.","problems":[]}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "full-stack",
+    "title": "Full stack development",
+    "description": "Ship a responsive app with a real API, account flows, and end-to-end verification.",
+    "milestones": [
+      {
+        "title": "Build the interface",
+        "description": "Start with a user task that fits in one screen and works on mobile.",
+        "skills": [
+          {"id":"react-ui","title":"React state and components","description":"Build a searchable list and an edit form with clear loading, error, and empty states.","problems":[]},
+          {"id":"accessible-ui","title":"Responsive and accessible UI","description":"Check keyboard navigation, form labels, focus, and the layout at phone widths.","problems":[]}
+        ]
+      },
+      {
+        "title": "Connect the backend",
+        "description": "Store user data and connect the interface to a real service.",
+        "skills": [
+          {"id":"http-api","title":"HTTP APIs and validation","description":"Create, list, and update resources. Validate input and return useful status codes and errors.","problems":[]},
+          {"id":"auth-and-ownership","title":"Authentication and data ownership","description":"Protect user routes on the server and verify that one account cannot read or modify another account’s records.","problems":[]}
+        ]
+      },
+      {
+        "title": "Ship a portfolio app",
+        "description": "Show a complete workflow that a reviewer can try.",
+        "skills": [
+          {"id":"e2e-testing","title":"End-to-end testing","description":"Test a primary workflow from sign-in through data creation and verify one meaningful failure case.","problems":[]},
+          {"id":"docker-deployment","title":"Docker and service health","description":"Start your app and dependencies with Compose. Add health checks and configure secrets through the environment.","problems":[]},
+          {"id":"full-stack-portfolio","title":"Full stack portfolio project","description":"Add sample data, a short demo, and instructions for running the app. Explain one UI decision and one API decision.","problems":[]}
+        ]
+      }
+    ]
+  }
+]

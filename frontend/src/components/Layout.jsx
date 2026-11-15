@@ -33,6 +33,7 @@ export default function Layout() {
         aria-label={menu ? 'Close navigation' : 'Open navigation'} aria-expanded={menu}>{menu ? <X size={20} /> : <Menu size={20} />}</button>
       <nav className={'nav-links ' + (menu ? 'open' : '')} aria-label="Main navigation">
         <NavLink to="/" end>Home</NavLink><NavLink to="/problems">Problems</NavLink>
+        <NavLink to="/career">Career</NavLink>
         <NavLink to="/contests">Contests</NavLink><NavLink to="/leaderboard">Leaderboard</NavLink>
         {user && <NavLink to="/dashboard">Dashboard</NavLink>}
         {user?.role === 'ADMIN' && <NavLink to="/admin">Admin</NavLink>}
@@ -54,7 +55,7 @@ export default function Layout() {
     <main id="main-content"><Outlet /></main>
     <footer className="footer"><div className="footer-inner">
       <div><Brand /><p>Practice with purpose. Compete with confidence.</p></div>
-      <nav aria-label="Footer navigation"><Link to="/problems">Problems</Link><Link to="/contests">Contests</Link>
+      <nav aria-label="Footer navigation"><Link to="/problems">Problems</Link><Link to="/career">Career</Link><Link to="/contests">Contests</Link>
         <Link to="/leaderboard">Leaderboard</Link><a href="https://github.com/topics/competitive-programming" target="_blank" rel="noreferrer">GitHub community</a></nav>
     </div></footer>
     {toast && <div className={'toast ' + toast.kind} role="status">

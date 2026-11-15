@@ -1,6 +1,6 @@
 # Deploy CodeArena
 
-Deploy the React frontend to Vercel and the Spring Boot API to Cloud Run. Use a separate managed PostgreSQL database and a private hosted Judge0-compatible sandbox. The Cloud Run buildpack builds the Java service from source. The local Python judge stays on the development machine.
+Deploy the React frontend to Vercel and the Spring Boot API to Cloud Run. Provision managed PostgreSQL and a private Judge0-compatible sandbox. The Cloud Run buildpack builds the Java service from source. PostgreSQL handles execution dispatch for the default deployment.
 
 ## 1. Prepare the database and hosted judge
 
@@ -12,7 +12,7 @@ Deploy the React frontend to Vercel and the Spring Boot API to Cloud Run. Use a 
 
 Choose the frontend’s production HTTPS origin first. In Google Cloud, enable Cloud Run, Cloud Build, Artifact Registry, and Secret Manager. Use a runtime service account with access to the specific secrets below. Follow the build permission steps for your project. [Cloud Run source deployments](https://docs.cloud.google.com/run/docs/deploying-source-code)
 
-Copy [the sample runtime settings](../deploy/cloud-run.env.example.yaml) to the ignored path `.local/cloud-run.env.yaml__ and fill in the origin, database, hosted judge URL, and the three language IDs. Set `CODEARENA_JUDGE0_AUTH` to `rapidapi` when your provider uses RapidAPI headers. Use `token` for a provider that expects `X-Auth-Token`.
+Copy [the sample runtime settings](../deploy/cloud-run.env.example.yaml) to `.local/cloud-run.env.yaml`. Fill in the frontend origin, database, hosted judge URL, and language IDs. Set `CODEARENA_JUDGE0_AUTH` to `rapidapi` when your provider uses RapidAPI headers. Use `token` for a provider that expects `X-Auth-Token`.
 
 Create these Secret Manager secrets in the same project.
 
@@ -22,13 +22,16 @@ Create these Secret Manager secrets in the same project.
 | `codearena-db` | Password for the production PostgreSQL account |
 | `codearena-judge` | Hosted judge token or RapidAPI key |
 
-If you need the initial admin account, optionally create a fourth secret with a random 16–72 character ASCII password and add `CODEARENA_ADMIN_PASSWORD=codearena-admin:1` to the secret bindings. The API creates `arena_admin` on first startup if the account is absent. Once the account exists, remove the bootstrap secret binding.
+To create the initial admin account, add `CODEARENA_ADMIN_PASSWORD=codearena-admin:1` with a random 16–72 character ASCII password. The API creates `arena_admin` if the account is absent. Remove the bootstrap secret binding after setup.
+
+To enable the AI coach and career guidance, store an OpenAI API key in Secret Manager and add `OPENAI_API_KEY=codearena-openai:1` to the secret bindings. The server applies per-account and platform-wide request limits. See [AI setup](../README.md#ai-coach) for the model and the data each action sends.
 
 Run this from the repo root with the Google Cloud CLI authenticated. Replace `REGION`, `PROJECT_ID`, and the example secret versions with your own values.
 
 ```powershell
 gcloud run deploy codearena-api `
   --source backend `
+  --project PROJECT_ID `
   --region REGION `
   --service-account codearena-runtime@PROJECT_ID.iam.gserviceaccount.com `
   --allow-unauthenticated `
@@ -37,12 +40,15 @@ gcloud run deploy codearena-api `
   --set-secrets "CODEARENA_JWT_SECRET=codearena-jwt:1,CODEARENA_DB_PASSWORD=codearena-db:1,CODEARENA_JUDGE0_TOKEN=codearena-judge:1" `
   --port 8080 --cpu 1 --memory 1Gi --concurrency 24 `
   --min 1 --max 1 --no-cpu-throttling `
-  --startup-probe "httpGet.path=/api/health,httpGet.port=8080,periodSeconds=5,timeoutSeconds=3,failureThreshold=20"
+  --startup-probe "httpGet.path=/actuator/health/readiness,httpGet.port=8080,periodSeconds=5,timeoutSeconds=3,failureThreshold=20" `
+  --liveness-probe "httpGet.path=/actuator/health/liveness,httpGet.port=8080,periodSeconds=15,timeoutSeconds=3,failureThreshold=3"
 ```
 
-Cloud Run must allocate CPU outside requests for the background worker to process the PostgreSQL queue. This configuration keeps one instance running and incurs ongoing compute charges. The API uses JWTs and backend role checks for private routes. The public startup probe checks database connectivity. [Cloud Run billing and background CPU](https://docs.cloud.google.com/run/docs/configuring/billing-settings)
+Cloud Run must allocate CPU outside requests so workers can keep processing the queue. This configuration keeps one instance running and incurs ongoing compute charges. Readiness checks PostgreSQL. Liveness checks the process. In-flight jobs that outlive an instance shutdown are recovered after their database lease expires. [Cloud Run container lifecycle](https://docs.cloud.google.com/run/docs/container-contract)
 
 The production defaults cap the queue at 16 active jobs, allow six jobs per user per minute, and admit up to 400 test executions across the platform per rolling day. Each submitted case consumes one unit of this budget. Set the limits to match your judge plan.
+
+For RabbitMQ dispatch, set `SPRING_PROFILES_ACTIVE: "prod,rabbitmq"` in the runtime settings. Use a dedicated virtual host and user with declare, publish, and consume permissions on `codearena.execution`. Set `CODEARENA_RABBITMQ_URL` to one `amqps://host:port` endpoint and supply `CODEARENA_RABBITMQ_VHOST` and `CODEARENA_RABBITMQ_USER` separately. Bind `CODEARENA_RABBITMQ_PASSWORD` from Secret Manager. Readiness also checks the broker in this profile. [RabbitMQ TLS](https://www.rabbitmq.com/docs/ssl)
 
 ## 3. Deploy the frontend
 
@@ -56,8 +62,14 @@ Use the same Vercel production origin you set in `CODEARENA_FRONTEND_ORIGIN`. To
 .\scripts\check-deployment.ps1 -FrontendOrigin 'https://your-codearena-project.vercel.app' -ApiOrigin 'https://your-api.run.app'
 ```
 
-The script needs PowerShell 7. It checks the public catalog, private routes, CORS, direct frontend links, and asset serving. The probe confirms judge configuration. To verify the provider itself, sign in as a regular user and submit a known working solution in each enabled language. Confirm the correct verdict appears in history and hidden output stays private.
+The script needs PowerShell 7. It checks readiness, the catalog, private routes, CORS, direct links to practice and career pages, and asset serving. On staging, run the same workflow learners use. Submit a known working solution in each enabled language. Confirm results and history contain public case output. Exercise each coaching action with the staging OpenAI key and verify that a saved career plan can be reopened and removed.
 
-For long-running public hosting, plan maintenance for the Spring stack. Spring Boot 3.5.16 was the last open-source release of 3.5. The app retains the requested 3.5 line and pins Tomcat 10.1.61. Commercial Spring support or a move to a supported open-source line is needed for ongoing Spring fixes. [Spring Boot support](https://spring.io/blog/2026/06/25/spring-boot-3-5-16-available-now/) [Tomcat security releases](https://tomcat.apache.org/security-10.html)
+## 5. Operate and recover
 
-For local development, use the [Windows setup](../README.md#start-locally).
+- Require the GitHub verification jobs before release. They exercise real PostgreSQL and RabbitMQ, the three language toolchains, the frontend build, and the Compose route from browser origin to judge.
+- Monitor the readiness endpoint and the admin-protected `/actuator/prometheus` endpoint. Track `arena_execution_oldest_pending_seconds` for a growing backlog, `arena_execution_recovery_total` for expired or requeued jobs, and `arena_ai_request_seconds` for AI latency and errors. RabbitMQ deployments can also track `arena_execution_publish_total` for broker delivery. Use the managed judge’s health and quota metrics to supplement application metrics.
+- The API logs JSON in production and returns `X-Request-ID` on API requests. For user reports, collect that ID, the submission ID, and the time. Provider failures log provider request IDs when available.
+- Configure automatic PostgreSQL backups and point-in-time recovery. Verify a restore to an isolated staging database before release. Take a backup before upgrading an existing deployment. The acceptance-count migration briefly locks submission writes while backfilling, so run it in a maintenance window sized for the submission table.
+- If the broker is unavailable, check readiness, TLS, and virtual-host permissions first. After connectivity returns, pending IDs are republished. Review the pending-age and recovery metrics before opening traffic again. The public API uses the hosted judge in the production profile.
+
+Use the [native Windows setup](../README.md#windows-setup-without-docker) for local development. The [Compose setup](../README.md#start-with-docker) exercises the RabbitMQ path with a trusted development judge.

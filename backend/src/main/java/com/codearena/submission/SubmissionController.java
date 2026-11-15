@@ -17,14 +17,16 @@ public class SubmissionController {
 
     @PostMapping("/submissions/run")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    SubmissionService.Card run(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SubmissionService.Request request) {
-        return submissions.queue(Tokens.userId(jwt), request, false);
+    SubmissionService.Card run(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SubmissionService.Request request,
+        @RequestHeader(name = "Idempotency-Key", required = false) String key) {
+        return submissions.queue(Tokens.userId(jwt), request, false, key);
     }
 
     @PostMapping("/submissions/submit")
     @ResponseStatus(HttpStatus.ACCEPTED)
-    SubmissionService.Card submit(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SubmissionService.Request request) {
-        return submissions.queue(Tokens.userId(jwt), request, true);
+    SubmissionService.Card submit(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SubmissionService.Request request,
+        @RequestHeader(name = "Idempotency-Key", required = false) String key) {
+        return submissions.queue(Tokens.userId(jwt), request, true, key);
     }
 
     @GetMapping("/submissions")
@@ -43,6 +45,11 @@ public class SubmissionController {
     @GetMapping("/submissions/{id}")
     SubmissionService.Detail detail(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
         return submissions.detail(id, Tokens.userId(jwt), false);
+    }
+
+    @GetMapping("/submissions/{id}/result")
+    SubmissionService.Result result(@AuthenticationPrincipal Jwt jwt, @PathVariable long id) {
+        return submissions.result(id, Tokens.userId(jwt));
     }
 
     @GetMapping("/admin/submissions")

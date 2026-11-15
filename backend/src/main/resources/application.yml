@@ -3,7 +3,12 @@ server:
   port: ${CODEARENA_API_PORT:8080}
   error:
     include-message: never
+  shutdown: graceful
 spring:
+  application:
+    name: codearena
+  jackson:
+    use-jackson2-defaults: true
   datasource:
     url: ${CODEARENA_DB_URL:jdbc:postgresql://127.0.0.1:55432/codearena}
     username: ${CODEARENA_DB_USER:codearena}
@@ -16,9 +21,66 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  task:
+    scheduling:
+      pool:
+        size: 2
+  rabbitmq:
+    host: ${CODEARENA_RABBITMQ_HOST:127.0.0.1}
+    port: ${CODEARENA_RABBITMQ_PORT:5672}
+    username: ${CODEARENA_RABBITMQ_USER:guest}
+    password: ${CODEARENA_RABBITMQ_PASSWORD:guest}
+    virtual-host: ${CODEARENA_RABBITMQ_VHOST:/}
+    connection-timeout: 3s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        concurrency: ${arena.execution.workers}
+        acknowledge-mode: auto
+        prefetch: 1
+        missing-queues-fatal: false
+        default-requeue-rejected: false
+  lifecycle:
+    timeout-per-shutdown-phase: 105s
+management:
+  endpoints:
+    access:
+      default: none
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      access: read-only
+      show-details: never
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+    prometheus:
+      access: read-only
+  health:
+    rabbit:
+      enabled: ${arena.execution.rabbitmq}
 arena:
   jwt-secret: ${CODEARENA_JWT_SECRET:}
   frontend-origin: ${CODEARENA_FRONTEND_ORIGIN:http://127.0.0.1:5173}
   judge-url: ${CODEARENA_JUDGE_URL:http://127.0.0.1:8091}
   judge-token: ${CODEARENA_JUDGE_TOKEN:}
   admin-password: ${CODEARENA_ADMIN_PASSWORD:}
+  execution:
+    rabbitmq: ${CODEARENA_EXECUTION_RABBITMQ:false}
+    workers: ${CODEARENA_EXECUTION_WORKERS:1}
+    shutdown-timeout-ms: 100000
+    dispatch-interval-ms: 500
+  ai:
+    api-key: ${OPENAI_API_KEY:}
+    model: ${CODEARENA_AI_MODEL:gpt-5.4-mini}
+    user-per-minute: ${CODEARENA_AI_USER_PER_MINUTE:4}
+    daily-limit: ${CODEARENA_AI_DAILY_LIMIT:200}
+    concurrent: ${CODEARENA_AI_CONCURRENT:4}
+    lock-active-contest: true

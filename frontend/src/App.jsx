@@ -12,6 +12,7 @@ import Rankings from './pages/Rankings';
 import Submissions, { SubmissionDetail } from './pages/Submissions';
 
 const Workspace = lazy(() => import('./pages/Workspace'));
+const Career = lazy(() => import('./pages/Career'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Profile = lazy(() => import('./pages/Profile'));
 const PublicProfile = lazy(() => import('./pages/Profile').then((module) => ({ default: module.PublicProfile })));
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="register" element={<Auth key="register" mode="register" />} />
       <Route path="problems" element={<Problems />} />
       <Route path="problems/:slug" element={<Workspace />} />
+      <Route path="career/:trackId?" element={<Career />} />
       <Route path="contests" element={<Contests />} />
       <Route path="contests/:id" element={<ContestDetail />} />
       <Route path="leaderboard" element={<Rankings />} />
